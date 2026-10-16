@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Spider-Hero: City Rescue</title>
+<style>
+:root{--bg:#07101f;--panel:#101c31;--ink:#edf6ff;--muted:#a9bad4;--red:#ff3b4e;--blue:#2ba8ff;--gold:#ffd166}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+body{min-height:100vh;display:flex;justify-content:center;padding:14px}
+.app{width:min(1100px,100%)}header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.brand{font-weight:900;font-size:clamp(20px,4vw,30px);letter-spacing:.3px}.brand span{color:var(--red)}.sub{color:var(--muted);font-size:13px}
+.hud{display:flex;gap:8px;flex-wrap:wrap}.pill{background:#14223a;border:1px solid #293b5c;border-radius:999px;padding:7px 11px;font-size:13px}
+.gamebox{position:relative;background:#081322;border:1px solid #273c5c;border-radius:16px;overflow:hidden;box-shadow:0 18px 55px #0006}
+canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;touch-action:none}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#06101deF,#08162be8);padding:20px;text-align:center}
+.card{width:min(550px,100%);background:#101c31eF;border:1px solid #344969;border-radius:18px;padding:clamp(18px,4vw,30px);box-shadow:0 12px 45px #0008}
+h1{font-size:clamp(26px,5vw,42px);margin:0 0 8px;line-height:1.05}h1 em{font-style:normal;color:var(--red)}p{color:#c4d3e8;line-height:1.5;margin:10px 0 18px}
+button{font:inherit;cursor:pointer;border:0;border-radius:11px;padding:11px 15px;font-weight:800;color:#07101f;background:#e9f3ff}
+.primary{background:linear-gradient(135deg,#ff4256,#ff784f);color:white}.secondary{background:#203451;color:#edf6ff;border:1px solid #3a5276}.buttons{display:flex;justify-content:center;gap:9px;flex-wrap:wrap}
+.tips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:15px}.tip{font-size:12px;color:#b6c8e0;background:#0b1526;border:1px solid #273a58;padding:6px 9px;border-radius:8px}
+.below{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:13px}
+.touch{display:none;gap:8px;justify-content:space-between;margin-top:10px;user-select:none}.touch .group{display:flex;gap:8px}.touch button{width:54px;height:48px;background:#172945;color:white;border:1px solid #3a5276;font-size:18px;touch-action:none}.touch button.action{background:#8b2332}
+@media(max-width:650px){body{padding:8px}.touch{display:flex}.below{font-size:12px}.hud{gap:5px}.pill{padding:6px 8px;font-size:12px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header><div><div class="brand">SPIDER<span>HERO</span> <span style="color:#edf6ff">: CITY RESCUE</span></div><div class="sub">A fan-made, original browser platform adventure</div></div>
+<div class="hud"><div class="pill">❤️ <b id="lives">3</b></div><div class="pill">🕸️ <b id="webs">12</b></div><div class="pill">⭐ <b id="score">0</b></div><div class="pill">STAGE <b id="stage">1</b>/4</div></div></header>
+<div class="gamebox">
+<canvas id="game" width="960" height="540" aria-label="Spider Hero platform game"></canvas>
+<div class="overlay" id="overlay"><div class="card"><h1>THE CITY NEEDS<br><em>SPIDER-HERO</em></h1><p>Leap across rooftops, swing with your web-shooters, collect spider tokens, unlock suits, and defeat the villains. Reach the final tower to rescue MJ!</p><div class="buttons"><button class="primary" id="start">START ADVENTURE</button><button class="secondary" id="how">HOW TO PLAY</button></div><div class="tips"><span class="tip">← → / A D Move</span><span class="tip">Space / ↑ Jump</span><span class="tip">X Web shot</span><span class="tip">C Swing boost</span></div><p id="hint" style="font-size:12px;margin-bottom:0">Original fan-made mini-game. No official affiliation.</p></div></div>
+</div>
+<div class="touch" id="touch"><div class="group"><button data-key="left">◀</button><button data-key="right">▶</button></div><div class="group"><button data-key="jump">⬆</button><button class="action" data-key="web">🕸</button><button class="action" data-key="swing">↗</button></div></div>
+<div class="below"><span id="status">Ready when you are, hero.</span><span>Tip: web shots stun villains. Look for glowing suit tokens.</span><button class="secondary" id="restart" style="padding:7px 10px">Restart</button></div>
+</div>
+<script>
+(()=>{
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),overlay=document.getElementById('overlay');
+const ui={lives:document.getElementById('lives'),webs:document.getElementById('webs'),score:document.getElementById('score'),stage:document.getElementById('stage'),status:document.getElementById('status'),hint:document.getElementById('hint')};
+const W=960,H=540,keys={left:false,right:false,jump:false,web:false,swing:false};
+const stages=[
+ {name:'Downtown Rooftops',boss:'Doctor Octopus',bossName:'DOC OCK',color:'#102b49',sky:'#091a31',goal:'Reach the rooftop beacon!',desc:'Web-sling across the rooftops'},
+ {name:'Goblin’s Night Run',boss:'Green Goblin',bossName:'GOBLIN',color:'#30204c',sky:'#160f2c',goal:'Stop the Goblin!',desc:'Watch out for pumpkin bombs'},
+ {name:'Psychic Showdown',boss:'Jean Grey',bossName:'PHOENIX',color:'#4a1d36',sky:'#260f25',goal:'Face the psychic guardian!',desc:'Dodge the energy orbs'},
+ {name:'Oscorp Final Tower',boss:'Final Showdown',bossName:'FINAL BOSS',color:'#123b3a',sky:'#081f2b',goal:'Rescue MJ!',desc:'One last climb to save MJ'}
+];
+const suits=[
+ {name:'Classic Suit',body:'#d92f43',mask:'#d92f43',trim:'#1766bd',cost:0},
+ {name:'Stealth Suit',body:'#1d263b',mask:'#111827',trim:'#55e6d2',cost:5},
+ {name:'Iron Spider Suit',body:'#c63a2f',mask:'#a61e2b',trim:'#f8c34e',cost:10},
+ {name:'Cosmic Suit',body:'#33246d',mask:'#20134d',trim:'#7be7ff',cost:16}
+];
+let running=false,frame=0,score=0,lives=3,webs=12,stage=0,tokenCount=0,suitIndex=0,player,boss,platforms,tokens,shots,enemyShots,particles,camera=0,worldWidth=2600,won=false,dead=false;
+function resetStage(keep=true){const s=stages[stage];worldWidth=stage===3?2800:2500;camera=0;player={x:70,y:370,w:34,h:48,vx:0,vy:0,onGround:false,facing:1,invuln:50,webCooldown:0,swingTime:0};platforms=[{x:0,y:455,w:420,h:100},{x:480,y:405,w:170,h:18},{x:700,y:360,w:180,h:18},{x:930,y:420,w:180,h:18},{x:1170,y:370,w:190,h:18},{x:1420,y:320,w:180,h:18},{x:1660,y:400,w:190,h:18},{x:1900,y:350,w:180,h:18},{x:2150,y:410,w:350,h:130}];tokens=[];for(let i=0;i<12;i++){let p=platforms[1+(i%7)];tokens.push({x:p.x+35+(i%3)*38,y:p.y-35,got:false,type:i%5===0?'suit':'star'});}shots=[];enemyShots=[];particles=[];boss={x:worldWidth-280,y:300,hp:stage===0?5:stage===1?6:stage===2?7:8,max:stage===0?5:stage===1?6:stage===2?7:8,active:false,stun:0,dir:-1,timer:0};}
+function start(){score=0;lives=3;webs=12;stage=0;tokenCount=0;suitIndex=0;won=false;dead=false;resetStage();running=true;overlay.style.display='none';ui.status.textContent='Stage 1: '+stages[0].desc;updateHud();}
+function updateHud(){ui.lives.textContent=lives;ui.webs.textContent=webs;ui.score.textContent=score;ui.stage.textContent=stage+1;}
+function say(t){ui.status.textContent=t;}
+function keyMap(e,down){let k=e.key.toLowerCase();if(['arrowleft','arrowright','arrowup',' ','x','c','a','d','w'].includes(k))e.preventDefault();if(k==='arrowleft'||k==='a')keys.left=down;if(k==='arrowright'||k==='d')keys.right=down;if(k==='arrowup'||k==='w'||k===' ')keys.jump=down;if(k==='x')keys.web=down;if(k==='c')keys.swing=down;}
+window.addEventListener('keydown',e=>keyMap(e,true));window.addEventListener('keyup',e=>keyMap(e,false));
+document.querySelectorAll('[data-key]').forEach(b=>{let k=b.dataset.key;const set=v=>{keys[k]=v};b.addEventListener('pointerdown',e=>{e.preventDefault();set(true);b.setPointerCapture?.(e.pointerId)});['pointerup','pointercancel','lostpointercapture'].forEach(ev=>b.addEventListener(ev,()=>set(false)));});
+document.getElementById('start').onclick=start;
+document.getElementById('restart').onclick=()=>{overlay.style.display='flex';document.querySelector('h1').innerHTML='READY FOR<br><em>ANOTHER RUN?</em>';document.querySelector('#hint').textContent='Start again to replay the adventure.';running=false;};
+document.getElementById('how').onclick=()=>{ui.hint.textContent='Move with A/D or arrows. Jump with Space/↑. Press X to shoot a web (uses web fluid); C gives a swing boost. Defeat bosses with web shots while dodging their attacks. Collect stars to unlock suits.';};
+function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
+function circle(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
+function text(t,x,y,size=18,color='#fff',align='left'){ctx.fillStyle=color;ctx.font=`800 ${size}px system-ui`;ctx.textAlign=align;ctx.fillText(t,x,y)}
+function drawCity(){let s=stages[stage];rect(0,0,W,H,s.sky);for(let layer=0;layer<3;layer++){let par=.15+layer*.14;ctx.fillStyle=[ '#12243e','#172c48','#1d3452'][layer];for(let i=-1;i<16;i++){let x=i*90-(camera*par%90),hh=80+((i*37+layer*23+1000)%140);rect(x,H-hh-65,65,hh,ctx.fillStyle);for(let wy=H-hh-50;wy<H-90;wy+=22)for(let wx=x+10;wx<x+60;wx+=18)if((wx+wy+i)%3!==0)rect(wx,wy,5,8,'#ffd16655');}}
+ // skyline web strands
+ ctx.strokeStyle='#8dbce022';ctx.lineWidth=1;for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+40,H);ctx.stroke();}
+}
+function drawPlatform(p){let x=p.x-camera;rect(x,p.y,p.w,p.h,'#243b59');rect(x,p.y,p.w,5,'#58c5ff');rect(x,p.y+5,p.w,p.h-5,'#13243b');for(let q=x+12;q<x+p.w-8;q+=32)rect(q,p.y+12,13,4,'#345172')}
+function drawHero(){let x=player.x-camera,y=player.y,s=suits[suitIndex];ctx.save();ctx.translate(x+player.w/2,y+player.h/2);ctx.scale(player.facing,1);if(player.invuln>0&&Math.floor(frame/4)%2===0)ctx.globalAlpha=.45;
+ // legs and torso
+ ctx.strokeStyle=s.trim;ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-5,12);ctx.lineTo(-9,23);ctx.lineTo(-12,player.h/2-1);ctx.moveTo(5,12);ctx.lineTo(10,22);ctx.lineTo(12,player.h/2-1);ctx.stroke();
+ rect(-12,-7,24,27,s.body);rect(-13,-23,26,23,s.mask);
+ // eyes
+ ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(-10,-16);ctx.lineTo(-2,-13);ctx.lineTo(-7,-8);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(10,-16);ctx.lineTo(2,-13);ctx.lineTo(7,-8);ctx.closePath();ctx.fill();
+ ctx.strokeStyle=s.trim;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-10,-2);ctx.lineTo(10,8);ctx.moveTo(10,-2);ctx.lineTo(-10,8);ctx.stroke();
+ ctx.strokeStyle=s.body;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(-10,-3);ctx.lineTo(-20,5);ctx.lineTo(-22,-2);ctx.moveTo(10,-3);ctx.lineTo(20,5);ctx.stroke();
+ ctx.restore();if(player.swingTime>0){ctx.strokeStyle='#d9f6ff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+player.w/2,y);ctx.lineTo(x+player.w/2+player.facing*70,y-95);ctx.stroke();}
+}
+function drawBoss(){if(!boss.active&&player.x<worldWidth-430)return;boss.active=true;let x=boss.x-camera,y=boss.y; if(stage===0){ // octopus
+ circle(x,y,25,'#d7dce5');circle(x,y-8,17,'#202b3c');rect(x-20,y+8,40,34,'#42536c');ctx.strokeStyle='#b6c4d8';ctx.lineWidth=8;for(let i=0;i<4;i++){ctx.beginPath();ctx.moveTo(x+(i<2?-12:12),y+18);ctx.quadraticCurveTo(x+(i<2?-55:55),y+45+(i%2)*18,x+(i<2?-42:42),y+70);ctx.stroke();}text('DOC OCK',x,y-38,14,'#e9f3ff','center');
+ }else if(stage===1){circle(x,y,22,'#71c95c');rect(x-18,y+15,36,38,'#477d43');ctx.fillStyle='#71c95c';ctx.beginPath();ctx.moveTo(x-18,y-13);ctx.lineTo(x-35,y-29);ctx.lineTo(x-7,y-22);ctx.lineTo(x+7,y-22);ctx.lineTo(x+35,y-29);ctx.lineTo(x+18,y-13);ctx.fill();circle(x-8,y-3,3,'#ffdf79');circle(x+8,y-3,3,'#ffdf79');text('GREEN GOBLIN',x,y-42,13,'#baf5a4','center');
+ }else if(stage===2){circle(x,y,24,'#f4a4d0');rect(x-18,y+17,36,34,'#bd315d');circle(x,y-7,31,'#ff5b8e33');text('JEAN GREY',x,y-42,13,'#ffd3e8','center');
+ }else{circle(x,y,23,'#e8e8f5');rect(x-20,y+16,40,38,'#344b75');circle(x,y-7,34,'#68dfff22');text('FINAL GUARDIAN',x,y-42,13,'#c8f6ff','center');}
+ // health bar
+ rect(x-48,y-63,96,8,'#442b40');rect(x-48,y-63,96*(boss.hp/boss.max),8,'#ff465c');}
+function drawTokens(){tokens.forEach(t=>{if(t.got)return;let x=t.x-camera;if(t.type==='suit'){circle(x,t.y,12,'#ffd166');circle(x,t.y,7,'#17243b');text('S',x,t.y+5,12,'#ffd166','center')}else{ctx.save();ctx.translate(x,t.y);ctx.rotate(frame*.025);ctx.fillStyle='#ffd166';ctx.beginPath();for(let i=0;i<10;i++){let r=i%2?5:11,a=i*Math.PI/5;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r)}ctx.closePath();ctx.fill();ctx.restore();}})}
+function drawShots(){shots.forEach(a=>{ctx.strokeStyle='#e6faff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(a.x-camera,a.y);ctx.lineTo(a.x-camera-a.dir*22,a.y+4);ctx.stroke()});enemyShots.forEach(a=>{circle(a.x-camera,a.y,8,a.color||'#ff654d');circle(a.x-camera,a.y,3,'#fff2cf')});}
+function particle(x,y,c){particles.push({x,y,vx:(Math.random()-.5)*4,vy:-Math.random()*3-1,life:25,c})}
+function damage(){if(player.invuln>0)return;lives--;player.invuln=100;player.vy=-7;player.vx=-player.facing*4;updateHud();if(lives<=0){running=false;showEnd(false,'THE CITY NEEDS YOU AGAIN','You were overwhelmed, hero. Try another run!');}else say('Ouch! Keep moving, hero.');}
+function showEnd(win,title,desc){overlay.style.display='flex';overlay.querySelector('h1').innerHTML=title.replace('\n','<br>');overlay.querySelector('p').textContent=desc;document.getElementById('start').textContent=win?'PLAY AGAIN':'TRY AGAIN';document.getElementById('hint').textContent=win?'MJ is safe. The city thanks you!':'Tip: jump over attacks and use web shots when the boss is close.';}
+function nextStage(){if(stage<3){stage++;resetStage();updateHud();say('Stage '+(stage+1)+': '+stages[stage].desc);player.invuln=100;}else{running=false;won=true;showEnd(true,'MJ IS SAFE!','You defeated the villains, unlocked suits, and rescued MJ. You are the city’s hero!');}}
+function update(){
+ frame++;if(!running)return;
+ let accel=.65;if(keys.left){player.vx-=accel;player.facing=-1}if(keys.right){player.vx+=accel;player.facing=1}player.vx=Math.max(-5.2,Math.min(5.2,player.vx));if(!keys.left&&!keys.right)player.vx*=.82;
+ if(keys.jump&&player.onGround){player.vy=-12.5;player.onGround=false;particle(player.x+16,player.y+45,'#9bdcff')}
+ if(keys.swing&&player.swingTime<=0){player.swingTime=18;player.vy=-8;player.vx+=player.facing*3;particle(player.x+17,player.y,'#dffaff')}
+ if(player.swingTime>0)player.swingTime--;
+ player.vy+=.58;player.vy=Math.min(13,player.vy);let oldY=player.y;player.x+=player.vx;player.y+=player.vy;player.x=Math.max(0,Math.min(worldWidth-player.w,player.x));player.onGround=false;
+ platforms.forEach(p=>{if(player.x+player.w>p.x&&player.x<p.x+p.w&&oldY+player.h<=p.y+5&&player.y+player.h>=p.y&&player.vy>=0){player.y=p.y-player.h;player.vy=0;player.onGround=true;}});
+ if(player.y>H+60){damage();player.y=200;player.vy=0;}
+ if(player.invuln>0)player.invuln--;if(player.webCooldown>0)player.webCooldown--;
+ if(keys.web&&player.webCooldown<=0&&webs>0){shots.push({x:player.x+player.w/2,y:player.y+18,dir:player.facing});webs--;player.webCooldown=18;updateHud();}
+ shots.forEach(a=>a.x+=a.dir*12);shots=shots.filter(a=>a.x>camera-50&&a.x<camera+W+100);
+ let bossNear=player.x>worldWidth-500;boss.active=bossNear;
+ if(bossNear){boss.timer++;boss.y=300+Math.sin(frame*.045)*38;boss.x=worldWidth-260+Math.sin(frame*.018)*30;if(boss.stun>0)boss.stun--;else if(boss.timer%65===0){enemyShots.push({x:boss.x-25,y:boss.y+15,vx:-3.8,vy:(player.y-boss.y)*.012,color:stage===1?'#9ee65c':stage===2?'#ff70bc':'#ff8d62'});}
+ shots.forEach(a=>{if(Math.abs(a.x-boss.x)<34&&Math.abs(a.y-boss.y)<52){boss.hp--;boss.stun=16;a.hit=true;score+=25;for(let i=0;i<5;i++)particle(boss.x,boss.y,'#b8f5ff')}});shots=shots.filter(a=>!a.hit);
+ if(boss.hp<=0){boss.hp=0;boss.active=false;enemyShots=[];if(!boss.cleared){boss.cleared=true;score+=200;webs=Math.min(12,webs+3);updateHud();say(stage===3?'The final guardian is down! Find MJ!':'Boss defeated! Head to the glowing beacon.');}if(stage===3&&player.x>worldWidth-120){nextStage();return;}}
+ }
+ enemyShots.forEach(a=>{a.x+=a.vx;a.y+=a.vy;if(Math.abs(a.x-(player.x+17))<22&&Math.abs(a.y-(player.y+22))<26){a.hit=true;damage();}});enemyShots=enemyShots.filter(a=>!a.hit&&a.x>camera-100&&a.x<worldWidth);
+ tokens.forEach(t=>{if(!t.got&&Math.abs((player.x+17)-t.x)<28&&Math.abs((player.y+22)-t.y)<38){t.got=true;if(t.type==='suit'){suitIndex=(suitIndex+1)%suits.length;score+=50;say('Suit acquired: '+suits[suitIndex].name+'!');}else{score+=10;tokenCount++;if(tokenCount%4===0)webs=Math.min(12,webs+2);}updateHud();}});
+ if(boss.cleared&&player.x>worldWidth-110){if(stage<3)nextStage();else{nextStage();return;}}
+ camera=Math.max(0,Math.min(worldWidth-W,player.x-W*.36));particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life--});particles=particles.filter(p=>p.life>0);
+ updateHud();
+}
+function draw(){
+ drawCity();platforms.forEach(drawPlatform);
+ // stage goal beacon
+ let gx=worldWidth-45-camera;rect(gx,250,5,205,'#b6efff');circle(gx+2,245,18,'#64dcff44');circle(gx+2,245,7,'#c7f8ff');
+ drawTokens();drawBoss();drawShots();drawHero();
+ particles.forEach(p=>{circle(p.x-camera,p.y,Math.max(1,p.life/6),p.c)});
+ // top stage card
+ rect(18,16,300,54,'#07101dcc');text('STAGE '+(stage+1)+' — '+stages[stage].name,30,38,15,'#f2f7ff');text(boss.cleared?'BOSS CLEARED — REACH BEACON':boss.active?'BOSS FIGHT — WEB SHOTS!':stages[stage].goal,30,58,11,boss.active?'#ffb4c0':'#9fdcff');
+ if(boss.active){rect(W-190,22,168,12,'#462c3b');rect(W-190,22,168*(boss.hp/boss.max),12,'#ff4056');text(stages[stage].bossName,W-190,52,13,'#fff','left');}
+ if(stage===3&&boss.cleared&&player.x>worldWidth-210){rect(W/2-120,120,240,90,'#0b1b2be8');text('MJ IS JUST AHEAD!',W/2,155,19,'#ffd166','center');text('Reach the beacon to rescue her',W/2,181,12,'#fff','center');}
+}
+function loop(){update();draw();requestAnimationFrame(loop)}
+resetStage();draw();loop();
+})();
+</script>
+</body>
+</html>
